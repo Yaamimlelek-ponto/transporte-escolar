@@ -74,6 +74,8 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
+const conteudo = document.getElementById("conteudo");
+
 window.registrar = async () => {
 
   const email = document.getElementById("email").value;
@@ -85,7 +87,6 @@ window.registrar = async () => {
   }
 
   try{
-
     const cred = await createUserWithEmailAndPassword(auth,email,senha);
 
     await setDoc(doc(db,"alunos",cred.user.uid),{
@@ -100,16 +101,6 @@ window.registrar = async () => {
   }
 }
 
-  const cred = await createUserWithEmailAndPassword(auth,email,senha);
-
-  await setDoc(doc(db,"alunos",cred.user.uid),{
-    email:email,
-    criadoEm:new Date()
-  });
-
-  alert("Conta criada!");
-}
-
 window.login = async () => {
 
   const email = document.getElementById("email").value;
@@ -121,15 +112,11 @@ window.login = async () => {
     alert(error.message);
   }
 }
-  
+
 window.logout = async () => {
   await signOut(auth);
   location.reload();
 }
-
-const emailInput = document.getElementById("email");
-const senhaInput = document.getElementById("senha");
-const conteudo = document.getElementById("conteudo");
 
 onAuthStateChanged(auth, async (user)=>{
   if(!user) return;
@@ -183,6 +170,11 @@ async function areaAluno(user){
 window.uploadComprovante=async(event,mes)=>{
 
   const file=event.target.files[0];
+  if(!file){
+    alert("Selecione um arquivo!");
+    return;
+  }
+
   const user=auth.currentUser;
   const ano=new Date().getFullYear();
 
