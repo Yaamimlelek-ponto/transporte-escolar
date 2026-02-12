@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transporte Escolar</title>
+
+<style>
+body{
+  font-family:Arial;
+  background:#fff8e1;
+  margin:0;
+  padding:20px;
+}
+h1{ text-align:center; color:#c49000; }
+.card{
+  background:white;
+  padding:15px;
+  margin:10px 0;
+  border-radius:10px;
+}
+.pago{
+  background:#c8f7c5 !important;
+}
+button{
+  background:#f4b400;
+  color:white;
+  border:none;
+  padding:8px;
+  border-radius:6px;
+  width:100%;
+  margin-top:5px;
+}
+input{
+  width:100%;
+  padding:8px;
+  margin:5px 0;
+}
+</style>
+</head>
+<body>
+
+<h1>🚍 Transporte Escolar</h1>
+
+<div id="auth">
+  <input type="email" id="email" placeholder="Email">
+  <input type="password" id="senha" placeholder="Senha">
+  <button onclick="login()">Entrar</button>
+  <button onclick="registrar()">Criar Conta</button>
+</div>
+
+<div id="conteudo"></div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, collection, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCRVwlFbF9FmrgdidYa89tFRd0g3OnMITk",
+  authDomain: "transporte-escolar-3299a.firebaseapp.com",
+  projectId: "transporte-escolar-3299a",
+  storageBucket: "transporte-escolar-3299a.firebasestorage.app",
+  messagingSenderId: "662041372417",
+  appId: "1:662041372417:web:7f60824b64caa40c719d00"
+};
+
+const ADMIN_EMAIL = "yaamimlelek@gmail.com";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+window.registrar = async () => {
+  const email = emailInput.value;
+  const senha = senhaInput.value;
+
+  const cred = await createUserWithEmailAndPassword(auth,email,senha);
+
+  await setDoc(doc(db,"alunos",cred.user.uid),{
+    email:email,
+    criadoEm:new Date()
+  });
+
+  alert("Conta criada!");
+}
+
+window.login = async () => {
+  await signInWithEmailAndPassword(auth,emailInput.value,senhaInput.value);
+}
+
+window.logout = async () => {
+  await signOut(auth);
+  location.reload();
+}
+
+const emailInput = document.getElementById("email");
+const senhaInput = document.getElementById("senha");
+const conteudo = document.getElementById("conteudo");
+
+onAuthStateChanged(auth, async (user)=>{
+  if(!user) return;
+
+  document.getElementById("auth").style.display="none";
+
+  if(user.email===ADMIN_EMAIL){
+    painelAdmin();
+  }else{
+    areaAluno(user);
+  }
+});
+
+async function areaAluno(user){
+
+  const meses=[
+    "Março","Abril","Maio","Junho",
+    "Julho","Agosto","Setembro",
+    "Outubro","Novembro","Dezembro"
+  ];
+
+  const ano=new Date().getFullYear();
+  conteudo.innerHTML="<h2>Área do Aluno</h2>";
+
+  for(const mes of meses){
+
+    const refDoc=doc(db,"alunos",user.uid,"pagamentos",`${ano}_${mes}`);
+    const snap=await getDoc(refDoc);
+
+    let status="Pendente";
+    let classe="card";
+
+    if(snap.exists()){
+      status=snap.data().status;
+      if(status==="Pago") classe="card pago";
+    }
+
+    conteudo.innerHTML+=`
+      <div class="${classe}">
+        <b>${mes}</b>
+        <p>Valor: R$ 20,00</p>
+        <p>Status: ${status}</p>
+        <input type="file" onchange="uploadComprovante(event,'${mes}')">
+      </div>
+    `;
+  }
+
+  conteudo.innerHTML+=`<button onclick="logout()">Sair</button>`;
+}
+
+window.uploadComprovante=async(event,mes)=>{
+
+  const file=event.target.files[0];
+  const user=auth.currentUser;
+  const ano=new Date().getFullYear();
+
+  const storageRef=ref(storage,`comprovantes/${user.uid}_${mes}`);
+  await uploadBytes(storageRef,file);
+  const url=await getDownloadURL(storageRef);
+
+  await setDoc(doc(db,"alunos",user.uid,"pagamentos",`${ano}_${mes}`),{
+    mes:mes,
+    valor:20,
+    status:"Pendente",
+    comprovante:url
+  });
+
+  alert("Comprovante enviado!");
+  location.reload();
+}
+
+async function painelAdmin(){
+
+  conteudo.innerHTML="<h2>Painel Administrativo</h2>";
+
+  const snap=await getDocs(collection(db,"alunos"));
+
+  snap.forEach(docSnap=>{
+    const aluno=docSnap.data();
+
+    conteudo.innerHTML+=`
+      <div class="card">
+        <b>${aluno.email}</b>
+        <button onclick="verAluno('${docSnap.id}')">
+          Ver Pagamentos
+        </button>
+      </div>
+    `;
+  });
+
+  conteudo.innerHTML+=`<button onclick="logout()">Sair</button>`;
+}
+
+window.verAluno=async(id)=>{
+
+  const meses=[
+    "Março","Abril","Maio","Junho",
+    "Julho","Agosto","Setembro",
+    "Outubro","Novembro","Dezembro"
+  ];
+
+  const ano=new Date().getFullYear();
+  conteudo.innerHTML="<h2>Pagamentos do Aluno</h2>";
+
+  for(const mes of meses){
+
+    const refDoc=doc(db,"alunos",id,"pagamentos",`${ano}_${mes}`);
+    const snap=await getDoc(refDoc);
+
+    let status="Pendente";
+    let comprovante="";
+
+    if(snap.exists()){
+      status=snap.data().status;
+      comprovante=snap.data().comprovante||"";
+    }
+
+    conteudo.innerHTML+=`
+      <div class="card">
+        <b>${mes}</b>
+        <p>Status: ${status}</p>
+        ${comprovante?`<a href="${comprovante}" target="_blank">Ver Comprovante</a>`:""}
+        <button onclick="marcarPago('${id}','${mes}')">
+          Marcar como Pago
+        </button>
+      </div>
+    `;
+  }
+
+  conteudo.innerHTML+=`
+    <button onclick="painelAdmin()">Voltar</button>
+  `;
+}
+
+window.marcarPago=async(id,mes)=>{
+  const ano=new Date().getFullYear();
+
+  await updateDoc(doc(db,"alunos",id,"pagamentos",`${ano}_${mes}`),{
+    status:"Pago"
+  });
+
+  alert("Marcado como Pago!");
+  verAluno(id);
+}
+
+</script>
+</body>
+</html>
