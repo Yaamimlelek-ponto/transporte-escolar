@@ -75,8 +75,30 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 
 window.registrar = async () => {
-  const email = emailInput.value;
-  const senha = senhaInput.value;
+
+  const email = document.getElementById("email").value;
+  const senha = document.getElementById("senha").value;
+
+  if(!email || !senha){
+    alert("Preencha email e senha!");
+    return;
+  }
+
+  try{
+
+    const cred = await createUserWithEmailAndPassword(auth,email,senha);
+
+    await setDoc(doc(db,"alunos",cred.user.uid),{
+      email:email,
+      criadoEm:new Date()
+    });
+
+    alert("Conta criada com sucesso!");
+
+  }catch(error){
+    alert(error.message);
+  }
+}
 
   const cred = await createUserWithEmailAndPassword(auth,email,senha);
 
@@ -89,9 +111,17 @@ window.registrar = async () => {
 }
 
 window.login = async () => {
-  await signInWithEmailAndPassword(auth,emailInput.value,senhaInput.value);
-}
 
+  const email = document.getElementById("email").value;
+  const senha = document.getElementById("senha").value;
+
+  try{
+    await signInWithEmailAndPassword(auth,email,senha);
+  }catch(error){
+    alert(error.message);
+  }
+}
+  
 window.logout = async () => {
   await signOut(auth);
   location.reload();
