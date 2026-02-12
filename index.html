@@ -1,59 +1,77 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Transporte Escolar</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transporte Escolar</title>
 
-  <style>
-    body {
-      font-family: Arial;
-      background: #fff8e1;
-      margin: 0;
-      padding: 20px;
-    }
-    h1 { text-align: center; color: #c49000; }
-    input, button {
-      padding: 10px;
-      margin: 5px 0;
-      width: 100%;
-      border-radius: 8px;
-      border: 1px solid #ddd;
-    }
-    button {
-      background: #f4b400;
-      color: white;
-      border: none;
-    }
-    .card {
-      background: white;
-      padding: 15px;
-      border-radius: 10px;
-      margin-top: 15px;
-    }
-  </style>
+<style>
+body {
+  font-family: Arial;
+  background: #fff8e1;
+  padding: 20px;
+  margin: 0;
+}
+h1 { text-align:center; color:#c49000; }
+input, button {
+  width:100%;
+  padding:10px;
+  margin:5px 0;
+  border-radius:8px;
+  border:1px solid #ddd;
+}
+button {
+  background:#f4b400;
+  color:white;
+  border:none;
+}
+.card {
+  background:white;
+  padding:15px;
+  border-radius:10px;
+  margin-top:15px;
+}
+.admin-card {
+  background:#fff3cd;
+}
+</style>
 </head>
+
 <body>
 
 <h1>🚍 Transporte Escolar</h1>
 
-<div id="login">
-  <input type="text" id="cpf" placeholder="Digite seu CPF">
+<div id="auth">
+  <h3>Login</h3>
+  <input type="email" id="email" placeholder="Email">
+  <input type="password" id="senha" placeholder="Senha">
   <button onclick="login()">Entrar</button>
+  <button onclick="registrar()">Criar Conta</button>
 </div>
 
-<div id="aluno" style="display:none">
+<div id="alunoArea" style="display:none">
   <div class="card">
     <h3>Área do Aluno</h3>
     <p>Status: <span id="status"></span></p>
-    <p>Valor mensal: R$ 20,00</p>
+    <p>Valor: R$ 20,00</p>
     <button onclick="whatsapp()">Enviar comprovante via WhatsApp</button>
+    <button onclick="logout()">Sair</button>
+  </div>
+</div>
+
+<div id="adminArea" style="display:none">
+  <div class="card admin-card">
+    <h3>Painel Administrativo</h3>
+    <div id="listaAlunos"></div>
+    <button onclick="logout()">Sair</button>
   </div>
 </div>
 
 <script type="module">
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, collection, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCRVwlFbF9FmrgdidYa89tFRd0g3OnMITk",
@@ -65,27 +83,82 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 const db = getFirestore(app);
 
+const ADMIN_EMAIL = "yaamimlelek@gmail.com";
+
+window.registrar = async function() {
+  const email = document.getElementById("email").value;
+  const senha = document.getElementById("senha").value;
+
+  const userCredential = await createUserWithEmailAndPassword(auth, email, senha);
+  
+  await setDoc(doc(db, "alunos", userCredential.user.uid), {
+    email: email,
+    status: "Pendente"
+  });
+
+  alert("Conta criada com sucesso!");
+}
+
 window.login = async function() {
-  const cpf = document.getElementById("cpf").value;
+  const email = document.getElementById("email").value;
+  const senha = document.getElementById("senha").value;
 
-  const docRef = doc(db, "alunos", cpf);
-  const docSnap = await getDoc(docRef);
+  await signInWithEmailAndPassword(auth, email, senha);
+}
 
-  if (docSnap.exists()) {
-    const dados = docSnap.data();
-    document.getElementById("login").style.display = "none";
-    document.getElementById("aluno").style.display = "block";
-    document.getElementById("status").innerText = dados.status;
-  } else {
-    alert("Aluno não encontrado");
+window.logout = async function() {
+  await signOut(auth);
+  location.reload();
+}
+
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    document.getElementById("auth").style.display = "none";
+
+    if (user.email === ADMIN_EMAIL) {
+      document.getElementById("adminArea").style.display = "block";
+      carregarAlunos();
+    } else {
+      document.getElementById("alunoArea").style.display = "block";
+      const docSnap = await getDoc(doc(db, "alunos", user.uid));
+      document.getElementById("status").innerText = docSnap.data().status;
+    }
   }
+});
+
+async function carregarAlunos() {
+  const querySnapshot = await getDocs(collection(db, "alunos"));
+  let html = "";
+
+  querySnapshot.forEach((docItem) => {
+    const dados = docItem.data();
+    html += `
+      <div style="margin-bottom:10px;">
+        <strong>${dados.email}</strong><br>
+        Status: ${dados.status}
+        <br>
+        <button onclick="marcarPago('${docItem.id}')">Marcar como Pago</button>
+      </div>
+    `;
+  });
+
+  document.getElementById("listaAlunos").innerHTML = html;
+}
+
+window.marcarPago = async function(id) {
+  await updateDoc(doc(db, "alunos", id), {
+    status: "Pago"
+  });
+  alert("Pagamento confirmado!");
+  carregarAlunos();
 }
 
 window.whatsapp = function() {
   const numero = "5563992312407";
-  const texto = "Olá, estou enviando meu comprovante de pagamento.";
+  const texto = "Olá, estou enviando meu comprovante.";
   window.open(`https://wa.me/${numero}?text=${encodeURIComponent(texto)}`);
 }
 
